@@ -18,7 +18,8 @@ def get_main_buttons():
         [InlineKeyboardButton("Invite Friends", callback_data="invite")],
         [InlineKeyboardButton("Daily Visit Reward", callback_data="daily")],
         [InlineKeyboardButton("Join Group", callback_data="group")],
-        [InlineKeyboardButton("Withdraw", callback_data="withdraw")]
+        [InlineKeyboardButton("Withdraw", callback_data="withdraw")],
+        [InlineKeyboardButton("Daily Task", callback_data="task")]
     ]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -101,7 +102,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     elif data == "group":
         text = (
             "Join the Telegram group to stay updated:\n\n"
-            "Group link: https://t.me/+nb-JllPAKkk4ODhl\n"
+            "Group link: https://t.me/+nb-JllPAKkk4ODhl"
         )
         buttons = [
             [InlineKeyboardButton("Back", callback_data="home")]
@@ -114,6 +115,38 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Balance: ${balance:.2f}"
         )
         buttons = [
+            [InlineKeyboardButton("Back", callback_data="home")]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif data == "task":
+        text = (
+            "Subscribe to the 5 given channels:\n\n"
+            "1. https://youtube.com/@mrbeast?si=TFX2Bou-EOh2rWGI\n"
+            "2. https://youtube.com/@flyingbeast320?si=tuSiIrIgkUU_hroo\n"
+            "3. https://youtube.com/@beastphilanthropy?si=G2WUx1OgEja8xBm8\n"
+            "4. https://youtube.com/@beastreacts?si=5SKhGcdt4-4iEk8e\n"
+            "5. https://youtube.com/@mrbeast2?si=Mha8jPUCM2S9wF3z"
+        )
+        buttons = [
+            [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")],
+            [InlineKeyboardButton("Back", callback_data="home")]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif data == "refresh":
+        # No checking yet, just shows the same task message
+        text = (
+            "Please complete the task and click refresh after subscribing.\n\n"
+            "Subscribe to the 5 given channels:\n"
+            "1. https://youtube.com/@mrbeast?si=TFX2Bou-EOh2rWGI\n"
+            "2. https://youtube.com/@flyingbeast320?si=tuSiIrIgkUU_hroo\n"
+            "3. https://youtube.com/@beastphilanthropy?si=G2WUx1OgEja8xBm8\n"
+            "4. https://youtube.com/@beastreacts?si=5SKhGcdt4-4iEk8e\n"
+            "5. https://youtube.com/@mrbeast2?si=Mha8jPUCM2S9wF3z"
+        )
+        buttons = [
+            [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")],
             [InlineKeyboardButton("Back", callback_data="home")]
         ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons))
