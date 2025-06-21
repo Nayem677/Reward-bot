@@ -17,6 +17,7 @@ def get_main_buttons():
         [InlineKeyboardButton("Home", callback_data="home")],
         [InlineKeyboardButton("Invite Friends", callback_data="invite")],
         [InlineKeyboardButton("Daily Visit Reward", callback_data="daily")],
+        [InlineKeyboardButton("Join Group", callback_data="group")],
         [InlineKeyboardButton("Withdraw", callback_data="withdraw")]
     ]
 
@@ -97,22 +98,21 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         ]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
-    elif data == "withdraw":
-        count = len(users.get(user_id, {}).get("invites", []))
-        if count >= MAX_INVITES:
-            text = (
-                "You have unlocked withdrawal.\n\n"
-                "Join the group: https://t.me/+nb-JllPAKkk4ODhl\n"
-                "Follow the instructions in the group to withdraw your balance.\n\n"
-                f"Balance: ${balance:.2f}"
-            )
-        else:
-            text = (
-                "Invite 10 people and get rewards.\n"
-                f"You've invited {count}/10 people.\n"
-                f"Balance: ${balance:.2f}"
-            )
+    elif data == "group":
+        text = (
+            "Join the Telegram group to stay updated:\n\n"
+            "Group link: https://t.me/+nb-JllPAKkk4ODhl\n"
+        )
+        buttons = [
+            [InlineKeyboardButton("Back", callback_data="home")]
+        ]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
+    elif data == "withdraw":
+        text = (
+            "The withdrawal information will be published later in the group.\n"
+            f"Balance: ${balance:.2f}"
+        )
         buttons = [
             [InlineKeyboardButton("Back", callback_data="home")]
         ]
