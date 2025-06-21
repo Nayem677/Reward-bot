@@ -10,6 +10,13 @@ MAX_INVITES = 4
 def get_balance(user_id):
     return users.get(user_id, {}).get("balance", 0)
 
+def get_main_buttons():
+    return [
+        [InlineKeyboardButton("🏠 Home", callback_data="home")],
+        [InlineKeyboardButton("📊 Leaderboard", callback_data="leaderboard")],
+        [InlineKeyboardButton("👫 Friends", callback_data="invite")]
+    ]
+
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user = update.effective_user
     user_id = user.id
@@ -26,68 +33,84 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
                     users[referrer_id]['invites'].add(user_id)
                     users[referrer_id]['balance'] += 8
 
-    await send_main_menu(update, context)
+    await show_home(update, context)
 
-async def send_main_menu(update_or_query, context: ContextTypes.DEFAULT_TYPE):
-    user_id = update_or_query.effective_user.id
+async def show_home(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
     balance = get_balance(user_id)
-
-    text = f"💰 Your Balance: ${balance:.2f}"
+    text = f"💰 Balance: ${balance:.2f}"
 
     buttons = [
-        [InlineKeyboardButton("👫 Invite Friends", callback_data="invite")],
         [InlineKeyboardButton("🎁 Daily Visit Reward", callback_data="daily")],
         [InlineKeyboardButton("💵 Withdraw", callback_data="withdraw")]
-    ]
+    ] + get_main_buttons()
 
-    if isinstance(update_or_query, Update):
-        await update_or_query.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+    if update.message:
+        await update.message.reply_text(text, reply_markup=InlineKeyboardMarkup(buttons))
     else:
-        await update_or_query.edit_message_text(text=text, reply_markup=InlineKeyboardMarkup(buttons))
+        await update.callback_query.edit_message_text(text=text, reply_markup=InlineKeyboardMarkup(buttons))
 
 async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     query = update.callback_query
     await query.answer()
     user_id = query.from_user.id
     data = query.data
+    balance = get_balance(user_id)
 
-    if data == "invite":
+    if data == "home":
+        await show_home(update, context)
+
+    elif data == "invite" or data == "friends":
         invite_link = f"https://t.me/{context.bot.username}?start={user_id}"
         count = len(users.get(user_id, {}).get("invites", []))
         text = (
-            f"👫 Invite your friends using this link:\n\n{invite_link}\n\n"
-            f"✅ Invited: {count}/{MAX_INVITES}"
+            f"👫 Invite your friends using this link:\n{invite_link}\n\n"
+            f"✅ Invited: {count}/{MAX_INVITES}\n\n💰 Balance: ${balance:.2f}"
         )
-        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="back")]]
-        await query.edit_message_text(text=text, reply_markup=InlineKeyboardMarkup(buttons))
+        buttons = [
+            [InlineKeyboardButton("⬅️ Back to Home", callback_data="home")]
+        ] + get_main_buttons()
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
     elif data == "daily":
         users[user_id]['balance'] += 1
-        text = "🎁 You've received $1 for today's visit!"
-        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="back")]]
-        await query.edit_message_text(text=text, reply_markup=InlineKeyboardMarkup(buttons))
+        text = f"🎁 You received $1 for daily visit!\n💰 Balance: ${get_balance(user_id):.2f}"
+        buttons = [
+            [InlineKeyboardButton("⬅️ Back to Home", callback_data="home")]
+        ] + get_main_buttons()
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
     elif data == "withdraw":
         count = len(users.get(user_id, {}).get("invites", []))
         if count >= MAX_INVITES:
             text = (
-                "✅ You've unlocked the withdrawal process!\n\n"
-                "🔗 [Join this private group](https://t.me/+nb-JllPAKkk4ODhl)\n\n"
-                "📢 To withdraw your amount, join the group and follow the next procedure."
+                f"✅ You've unlocked withdrawal!\n\n"
+                f"🔗 Join the group: [Click here](https://t.me/+nb-JllPAKkk4ODhl)\n\n"
+                f"📢 Follow the instructions in the group to withdraw your balance.\n\n"
+                f"💰 Balance: ${balance:.2f}"
             )
         else:
-            text = "⛔ You need 4 successful invites to unlock withdrawal."
+            text = (
+                f"⛔ You need 4 successful invites to unlock withdrawal.\n\n"
+                f"💰 Balance: ${balance:.2f}"
+            )
+        buttons = [
+            [InlineKeyboardButton("⬅️ Back to Home", callback_data="home")]
+        ] + get_main_buttons()
+        await query.edit_message_text(text, parse_mode='Markdown', reply_markup=InlineKeyboardMarkup(buttons))
 
-        buttons = [[InlineKeyboardButton("🔙 Back", callback_data="back")]]
-        await query.edit_message_text(text=text, reply_markup=InlineKeyboardMarkup(buttons), parse_mode='Markdown')
-
-    elif data == "back":
-        await send_main_menu(query, context)
+    elif data == "leaderboard":
+        text = "📊 Leaderboard is under development.\n\n💰 Balance: ${:.2f}".format(balance)
+        buttons = [
+            [InlineKeyboardButton("⬅️ Back to Home", callback_data="home")]
+        ] + get_main_buttons()
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
 def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
+
     app.run_polling()
 
 if __name__ == "__main__":
