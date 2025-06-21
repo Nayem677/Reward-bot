@@ -6,7 +6,8 @@ import time
 TOKEN = os.getenv("BOT_TOKEN")
 
 users = {}
-MAX_INVITES = 4
+MAX_INVITES = 10
+INVITE_REWARD = 3
 
 def get_balance(user_id):
     return users.get(user_id, {}).get("balance", 0)
@@ -36,9 +37,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             referrer_id = int(args[0])
             if referrer_id != user_id and referrer_id in users:
                 if len(users[referrer_id]['invites']) < MAX_INVITES:
-                    users[user_id]['referred_by'] = referrer_id
-                    users[referrer_id]['invites'].add(user_id)
-                    users[referrer_id]['balance'] += 8
+                    if user_id not in users[referrer_id]['invites']:
+                        users[user_id]['referred_by'] = referrer_id
+                        users[referrer_id]['invites'].add(user_id)
+                        users[referrer_id]['balance'] += INVITE_REWARD
 
     await show_home(update, context)
 
@@ -105,7 +107,12 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 f"Balance: ${balance:.2f}"
             )
         else:
-            text = f"You need 4 successful invites to unlock withdrawal.\nBalance: ${balance:.2f}"
+            text = (
+                "Invite 10 people and get rewards.\n"
+                f"You've invited {count}/10 people.\n"
+                f"Balance: ${balance:.2f}"
+            )
+
         buttons = [
             [InlineKeyboardButton("Back", callback_data="home")]
         ]
