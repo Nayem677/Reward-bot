@@ -1,0 +1,2 @@
+# Reward-bot
+Easy money
