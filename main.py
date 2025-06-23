@@ -1,6 +1,7 @@
 from telegram import Update, InlineKeyboardButton, InlineKeyboardMarkup
-from telegram.ext import Application, CommandHandler, CallbackQueryHandler, ContextTypes
+from telegram.ext import Application, CommandHandler, CallbackQueryHandler, MessageHandler, filters, ContextTypes
 import os
+import random
 import time
 
 TOKEN = os.getenv("BOT_TOKEN")
@@ -8,6 +9,13 @@ TOKEN = os.getenv("BOT_TOKEN")
 users = {}
 MAX_INVITES = 10
 INVITE_REWARD = 3
+
+simple_questions = [
+    ("3 + 5", 8), ("9 - 2", 7), ("6 + 4", 10), ("7 - 3", 4), ("2 + 2", 4)
+]
+complex_questions = [
+    ("12 * 2 - 4", 20), ("8 + 4 * 2", 16), ("5 * 5 + 3", 28), ("18 - 6 / 3", 16), ("10 + 12 - 4", 18)
+]
 
 def get_balance(user_id):
     return users.get(user_id, {}).get("balance", 0)
@@ -23,11 +31,12 @@ def get_main_buttons():
             InlineKeyboardButton("Daily Visit Reward", callback_data="daily")
         ],
         [
-            InlineKeyboardButton("Join Group", callback_data="group"),
+            InlineKeyboardButton("Chat with Admin", callback_data="admin"),
             InlineKeyboardButton("Withdraw", callback_data="withdraw")
         ],
         [
-            InlineKeyboardButton("Daily Task", callback_data="task")
+            InlineKeyboardButton("Daily Task", callback_data="task"),
+            InlineKeyboardButton("How to Withdraw", callback_data="how")
         ]
     ]
 
@@ -41,7 +50,9 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'balance': 5,
             'invites': set(),
             'referred_by': None,
-            'last_claimed': 0
+            'last_claimed': 0,
+            'task_stage': None,
+            'task_answer': None
         }
 
         if args:
@@ -74,10 +85,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     data = query.data
     balance = get_balance(user_id)
 
-    if data == "home":
-        await show_home(update, context)
-
-    elif data == "refresh":
+    if data == "home" or data == "refresh":
         await show_home(update, context)
 
     elif data == "invite":
@@ -88,9 +96,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             f"Invited: {count}/{MAX_INVITES}\n"
             f"Balance: ${balance:.2f}"
         )
-        buttons = [
-            [InlineKeyboardButton("Back", callback_data="home")]
-        ]
+        buttons = [[InlineKeyboardButton("Back", callback_data="home")]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
     elif data == "daily":
@@ -106,50 +112,72 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             minutes = (remaining % 3600) // 60
             text = f"You already claimed your daily reward.\nTry again in {hours}h {minutes}m.\nBalance: ${balance:.2f}"
 
-        buttons = [
-            [InlineKeyboardButton("Back", callback_data="home")]
-        ]
+        buttons = [[InlineKeyboardButton("Back", callback_data="home")]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
-    elif data == "group":
-        text = (
-            "Join the Telegram group to stay updated:\n\n"
-            "Group link: https://t.me/+nb-JllPAKkk4ODhl"
-        )
-        buttons = [
-            [InlineKeyboardButton("Back", callback_data="home")]
-        ]
+    elif data == "admin":
+        text = "Chat with Admin: @Your_bot6t9"
+        buttons = [[InlineKeyboardButton("Back", callback_data="home")]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
     elif data == "withdraw":
-        text = (
-            "The withdrawal information will be published later in the group.\n"
-            f"Balance: ${balance:.2f}"
-        )
-        buttons = [
-            [InlineKeyboardButton("Back", callback_data="home")]
-        ]
+        text = "The withdrawal information will be published later in the group.\nBalance: ${:.2f}".format(balance)
+        buttons = [[InlineKeyboardButton("Back", callback_data="home")]]
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif data == "how":
+        text = "Ask the Admin when your balance reach to 100 USD"
+        buttons = [[InlineKeyboardButton("Back", callback_data="home")]]
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons))
 
     elif data == "task":
-        text = (
-            "Subscribe to the 5 given channels:\n\n"
-            "1. https://youtube.com/@mrbeast?si=TFX2Bou-EOh2rWGI\n"
-            "2. https://youtube.com/@flyingbeast320?si=tuSiIrIgkUU_hroo\n"
-            "3. https://youtube.com/@beastphilanthropy?si=G2WUx1OgEja8xBm8\n"
-            "4. https://youtube.com/@beastreacts?si=5SKhGcdt4-4iEk8e\n"
-            "5. https://youtube.com/@mrbeast2?si=Mha8jPUCM2S9wF3z"
-        )
         buttons = [
-            [InlineKeyboardButton("🔄 Refresh", callback_data="refresh")],
+            [InlineKeyboardButton("Simple Task ($1)", callback_data="task_simple")],
+            [InlineKeyboardButton("Complex Task ($2)", callback_data="task_complex")],
             [InlineKeyboardButton("Back", callback_data="home")]
         ]
-        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup(buttons))
+        await query.edit_message_text("Choose your task:", reply_markup=InlineKeyboardMarkup(buttons))
+
+    elif data == "task_simple":
+        question, answer = random.choice(simple_questions)
+        users[user_id]['task_stage'] = "simple"
+        users[user_id]['task_answer'] = answer
+        await query.edit_message_text(f"Answer this: {question}")
+
+    elif data == "task_complex":
+        question, answer = random.choice(complex_questions)
+        users[user_id]['task_stage'] = "complex"
+        users[user_id]['task_answer'] = answer
+        await query.edit_message_text(f"Answer this: {question}")
+
+async def answer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    user_id = update.effective_user.id
+    message = update.message.text.strip()
+
+    if user_id in users and users[user_id]['task_stage']:
+        try:
+            if int(message) == users[user_id]['task_answer']:
+                if users[user_id]['task_stage'] == "simple":
+                    users[user_id]['balance'] += 1
+                    await update.message.reply_text("✅ Correct! You earned $1.")
+                else:
+                    users[user_id]['balance'] += 2
+                    await update.message.reply_text("✅ Correct! You earned $2.")
+            else:
+                await update.message.reply_text("❌ Incorrect answer.")
+
+        except ValueError:
+            await update.message.reply_text("❌ Please enter a valid number.")
+
+        users[user_id]['task_stage'] = None
+        users[user_id]['task_answer'] = None
+        await show_home(update, context)
 
 def main():
     app = Application.builder().token(TOKEN).build()
     app.add_handler(CommandHandler("start", start))
     app.add_handler(CallbackQueryHandler(button_handler))
+    app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, answer_handler))
     app.run_polling()
 
 if __name__ == "__main__":
