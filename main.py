@@ -3,7 +3,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 import os
 import random
 import time
-import re
+from datetime import datetime, timedelta, timezone
 
 TOKEN = os.getenv("BOT_TOKEN")
 
@@ -25,7 +25,8 @@ def get_main_buttons():
         [InlineKeyboardButton("Home", callback_data="home"), InlineKeyboardButton("Refresh", callback_data="refresh")],
         [InlineKeyboardButton("Invite Friends", callback_data="invite"), InlineKeyboardButton("Daily Visit Reward", callback_data="daily")],
         [InlineKeyboardButton("Chat with Admin", callback_data="admin"), InlineKeyboardButton("Withdraw", callback_data="withdraw")],
-        [InlineKeyboardButton("Daily Task", callback_data="task"), InlineKeyboardButton("How to Withdraw", callback_data="how")]
+        [InlineKeyboardButton("Daily Task", callback_data="task"), InlineKeyboardButton("How to Withdraw", callback_data="how")],
+        [InlineKeyboardButton("📢 Payment Info", callback_data="notice"), InlineKeyboardButton("⏳ Countdown Timer", callback_data="countdown")]
     ]
 
 async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -91,11 +92,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if data == "invite":
         invite_link = f"https://t.me/{context.bot.username}?start={user_id}"
         count = len(users[user_id]['invites'])
-        text = (
-            f"Your invite link:\n{invite_link}\n\n"
-            f"Invited: {count}/{MAX_INVITES}\n"
-            f"Balance: ${balance:.2f}"
-        )
+        text = f"Your invite link:\n{invite_link}\n\nInvited: {count}/{MAX_INVITES}\nBalance: ${balance:.2f}"
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="home")]]))
 
     elif data == "daily":
@@ -109,7 +106,6 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             remaining = int(86400 - (now - last))
             h, m = divmod(remaining // 60, 60)
             text = f"You already claimed your daily reward.\nTry again in {h}h {m}m."
-
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="home")]]))
 
     elif data == "admin":
@@ -120,6 +116,28 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "how":
         await query.edit_message_text("Ask the Admin when your balance reach to 100 USD", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="home")]]))
+
+    elif data == "notice":
+        text = (
+            "Those who completed the minimum withdrawal amount will get their Money in 20th July.\n"
+            "Don't forgot to top up 0.2 solona in your account as gas fees."
+        )
+        await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="home")]]))
+
+    elif data == "countdown":
+        target_dt = datetime(2024, 7, 20, 0, 0, 0, tzinfo=timezone(timedelta(hours=6)))  # BD Time
+        now_dt = datetime.now(timezone(timedelta(hours=6)))
+        diff = target_dt - now_dt
+
+        if diff.total_seconds() > 0:
+            days, rem = divmod(diff.total_seconds(), 86400)
+            hours, rem = divmod(rem, 3600)
+            minutes, seconds = divmod(rem, 60)
+            countdown_text = f"Time left: {int(days)} days, {int(hours)}h {int(minutes)}m {int(seconds)}s"
+        else:
+            countdown_text = "⏳ Countdown Complete!"
+
+        await query.edit_message_text(countdown_text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="home")]]))
 
     elif data == "task":
         task_buttons = [
@@ -173,7 +191,6 @@ async def answer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
                 await update.message.reply_text(f"✅ Correct! You earned ${user['task_reward']}")
         else:
             await update.message.reply_text("❌ Incorrect.")
-
         user['task_stage'] = None
         user['task_answer'] = None
         await show_home(update, context)
