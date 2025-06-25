@@ -3,7 +3,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 import os
 import random
 import time
-from datetime import datetime
+from datetime import datetime, timedelta
 
 TOKEN = os.getenv("BOT_TOKEN")
 
@@ -50,7 +50,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'used_questions': set(),
             'daily_questions_done': 0,
             'last_task_day': None,
-            'watch_earned': False
+            'watch_earned': False,
+            'watch_reward_time': None
         }
 
         if args:
@@ -141,11 +142,26 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Choose your task:", reply_markup=InlineKeyboardMarkup(task_buttons))
 
     elif data == "task_watch":
-        if not users[user_id].get('watch_earned'):
-            users[user_id]['balance'] += 40
-            users[user_id]['watch_earned'] = True
+        now = datetime.now()
+        user = users[user_id]
+        today = now.date()
+
+        if user.get("watch_reward_time") and user["watch_reward_time"].date() == today:
+            await context.bot.send_message(chat_id=user_id, text="✅ You have already clicked Watch & Earn today. Please come back tomorrow.")
+            await show_home(update, context)
+            return
+
+        user["watch_reward_time"] = now
         await context.bot.send_message(chat_id=user_id, text="Click below to watch & earn $40 👇")
         await context.bot.send_message(chat_id=user_id, text="https://doctorreward.blogspot.com/2025/06/watch-video-earn-usd.html?m=1")
+        await context.bot.send_message(chat_id=user_id, text="✅ You will receive $40 after 2 hours if this is your first watch today.")
+
+        context.job_queue.run_once(
+            callback=deliver_watch_reward,
+            when=7200,
+            data={"user_id": user_id},
+            name=str(user_id) + "_watch_reward"
+        )
         await show_home(update, context)
 
     elif data == "task_simple":
@@ -160,7 +176,7 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
             await query.edit_message_text("You have reached today's limit of 4 questions.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="home")]]))
             return
 
-        available = [q for q in simple_questions if str(q) not in user['used_questions']]
+        available = [qa for qa in simple_questions if str(qa) not in user['used_questions']]
         if not available:
             await query.edit_message_text("❌ No new questions available.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="home")]]))
             return
@@ -170,6 +186,18 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         user['task_answer'] = str(a)
         user['used_questions'].add(str((q, a)))
         await query.edit_message_text(f"Answer this: {q}")
+
+async def deliver_watch_reward(context: ContextTypes.DEFAULT_TYPE):
+    user_id = context.job.data["user_id"]
+    user = users.get(user_id)
+    if not user:
+        return
+
+    if user["balance"] < EARNING_LIMIT:
+        user["balance"] += 40
+        await context.bot.send_message(chat_id=user_id, text="🎉 You've received $40 from Watch & Earn!")
+    else:
+        await context.bot.send_message(chat_id=user_id, text="⚠️ You reached the $200 earning limit. Watch & Earn reward not added.")
 
 async def answer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
     user_id = update.effective_user.id
