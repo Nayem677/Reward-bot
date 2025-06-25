@@ -3,6 +3,7 @@ from telegram.ext import Application, CommandHandler, CallbackQueryHandler, Mess
 import os
 import random
 import time
+from datetime import datetime
 
 TOKEN = os.getenv("BOT_TOKEN")
 
@@ -11,46 +12,13 @@ MAX_INVITES = 10
 INVITE_REWARD = 2
 EARNING_LIMIT = 200
 
-# ✅ NEW QUESTION SETS
+# Simple Arithmetic Questions
 simple_questions = [
     ("5 + 7", "12"), ("12 - 3", "9"), ("4 × 6", "24"), ("18 ÷ 3", "6"),
     ("9 + 8", "17"), ("14 - 5", "9"), ("7 × 5", "35"), ("20 ÷ 4", "5"),
     ("6 + 13", "19"), ("11 - 6", "5"), ("3 × 8", "24"), ("24 ÷ 6", "4"),
     ("10 + 15", "25"), ("30 - 12", "18"), ("5 × 9", "45"), ("16 ÷ 4", "4"),
     ("25 + 25", "50"), ("60 - 20", "40"), ("8 × 7", "56"), ("56 ÷ 7", "8")
-]
-
-complex_questions = [
-    ("25 + 36 - 12", "49"), ("50 × 2 + 30", "130"), ("(8 + 6) × 3", "42"),
-    ("144 ÷ 12 + 6", "18"), ("100 - 45 + 20", "75"), ("200 ÷ 4 - 10", "40"),
-    ("(15 + 5) × 2", "40"), ("81 ÷ (9 - 6)", "27"), ("64 ÷ 8 × 2", "16"),
-    ("55 + (25 - 10)", "70"), ("(45 ÷ 5) + 3", "12"), ("(100 - 60) ÷ 2", "20"),
-    ("(30 × 2) + 15", "75"), ("(90 ÷ 3) - 10", "20"), ("(18 + 12) ÷ 3", "10"),
-    ("(60 + 20) ÷ 4", "20"), ("(72 ÷ 8) + (12 ÷ 4)", "12"),
-    ("(40 - 20) × 3", "60"), ("(96 ÷ 8) + (16 ÷ 4)", "16"),
-    ("(120 - 30) ÷ (18 ÷ 3)", "15")
-]
-
-expressions = [
-    ("x + 5", "x + 5"), ("x - 3", "x - 3"), ("2x - 2x", "0"), ("x ÷ 4", "x/4"),
-    ("x + 7", "x + 7"), ("x - 6", "x - 6"), ("3x + 9x", "12x"), ("x ÷ 5", "x/5"),
-    ("x + 9", "x + 9"), ("x - 2", "x - 2"), ("5x - 5x", "0"), ("x ÷ 2", "x/2"),
-    ("x + 12", "x + 12"), ("x - 8", "x - 8"), ("4x + 3x", "7x"),
-    ("x ÷ 3", "x/3"), ("x + 6", "x + 6"), ("x - 4", "x - 4"),
-    ("6x - x", "5x"), ("x ÷ 6", "x/6")
-]
-
-quadratics = [
-    ("2x + 5 - 3x", "-x + 5"), ("3(x + 4)", "3x + 12"), ("4x - 2 + 6x", "10x - 2"),
-    ("5(x - 3) + 2x", "7x - 15"), ("(2x + 3) - (x - 4)", "x + 7"),
-    ("3(x + 2) - x", "2x + 6"), ("(4x - 1) + (2x + 5)", "6x + 4"),
-    ("2(x - 3) + 3(x + 1)", "5x - 3"), ("6x - (2x + 4)", "4x - 4"),
-    ("(3x + 5) - (x + 2)", "2x + 3"), ("7x - 4x + 9", "3x + 9"),
-    ("2(x + 3) + 3(x - 2)", "5x + 0"), ("5(x - 1) - x", "4x - 5"),
-    ("4x - 3x + 7", "x + 7"), ("(2x + 6) + (x - 4)", "3x + 2"),
-    ("3x + 2 - 5x + 7", "-2x + 9"), ("(6x - 3) - (2x + 1)", "4x - 4"),
-    ("x + x + x + 2x", "5x"), ("(2x - 5) + (3x + 4)", "5x - 1"),
-    ("8x - (2x - 6)", "6x + 6")
 ]
 
 def get_balance(user_id):
@@ -79,7 +47,10 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'task_stage': None,
             'task_answer': None,
             'name': None,
-            'used_questions': set()
+            'used_questions': set(),
+            'daily_questions_done': 0,
+            'last_task_day': None,
+            'watch_earned': False
         }
 
         if args:
@@ -139,9 +110,9 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         now = time.time()
         last = users[user_id].get("last_claimed", 0)
         if now - last >= 86400:
-            users[user_id]['balance'] += 1
+            users[user_id]['balance'] += 2.5
             users[user_id]['last_claimed'] = now
-            text = f"You received $1 for daily visit.\nBalance: ${users[user_id]['balance']:.2f}"
+            text = f"You received $2.5 for daily visit.\nBalance: ${users[user_id]['balance']:.2f}"
         else:
             remaining = int(86400 - (now - last))
             h, m = divmod(remaining // 60, 60)
@@ -163,35 +134,40 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
 
     elif data == "task":
         task_buttons = [
-            [InlineKeyboardButton("Simple ($2)", callback_data="task_simple"), InlineKeyboardButton("Complex ($5)", callback_data="task_complex")],
-            [InlineKeyboardButton("Simplify Expr ($10)", callback_data="task_expr"), InlineKeyboardButton("Quadratic ($10)", callback_data="task_quad")],
+            [InlineKeyboardButton("Simple Arithmetic ($2.5)", callback_data="task_simple")],
+            [InlineKeyboardButton("Watch and Earn ($40)", callback_data="task_watch")],
             [InlineKeyboardButton("Back", callback_data="home")]
         ]
         await query.edit_message_text("Choose your task:", reply_markup=InlineKeyboardMarkup(task_buttons))
 
-    elif data.startswith("task_"):
-        user = users[user_id]
-        used = user['used_questions']
-        pool_map = {
-            "task_simple": simple_questions,
-            "task_complex": complex_questions,
-            "task_expr": expressions,
-            "task_quad": quadratics
-        }
-        reward_map = {
-            "task_simple": 2, "task_complex": 5,
-            "task_expr": 10, "task_quad": 10
-        }
+    elif data == "task_watch":
+        if not users[user_id].get('watch_earned'):
+            users[user_id]['balance'] += 40
+            users[user_id]['watch_earned'] = True
+        await context.bot.send_message(chat_id=user_id, text="Click below to watch & earn $40 👇")
+        await context.bot.send_message(chat_id=user_id, text="https://doctorreward.blogspot.com/2025/06/watch-video-earn-usd.html?m=1")
+        await show_home(update, context)
 
-        available = [q for q in pool_map[data] if str(q) not in used]
+    elif data == "task_simple":
+        today = datetime.now().date()
+        user = users[user_id]
+        if user['last_task_day'] != today:
+            user['used_questions'] = set()
+            user['daily_questions_done'] = 0
+            user['last_task_day'] = today
+
+        if user['daily_questions_done'] >= 4:
+            await query.edit_message_text("You have reached today's limit of 4 questions.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="home")]]))
+            return
+
+        available = [q for q in simple_questions if str(q) not in user['used_questions']]
         if not available:
-            await query.edit_message_text("❌ No new questions available. Try another task.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="task")]]))
+            await query.edit_message_text("❌ No new questions available.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="home")]]))
             return
 
         q, a = random.choice(available)
-        user['task_stage'] = data
+        user['task_stage'] = "task_simple"
         user['task_answer'] = str(a)
-        user['task_reward'] = reward_map[data]
         user['used_questions'].add(str((q, a)))
         await query.edit_message_text(f"Answer this: {q}")
 
@@ -209,19 +185,16 @@ async def answer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await show_home(update, context)
         return
 
-    if user['task_stage']:
-        correct = str(user['task_answer']).replace(" ", "")
-        if msg.replace(" ", "") == correct:
-            if user['balance'] >= EARNING_LIMIT:
-                await update.message.reply_text(
-                    "You have to withdraw your amount now, Go to Withdraw section and text the Admin.",
-                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back to Home", callback_data="home")]])
-                )
+    if user['task_stage'] == "task_simple":
+        if msg.replace(" ", "") == user['task_answer']:
+            if user['balance'] < EARNING_LIMIT:
+                user['balance'] += 2.5
+                await update.message.reply_text("✅ Correct! You earned $2.5")
             else:
-                user['balance'] += user['task_reward']
-                await update.message.reply_text(f"✅ Correct! You earned ${user['task_reward']}")
+                await update.message.reply_text("You've reached the $200 earning limit.")
         else:
             await update.message.reply_text("❌ Incorrect.")
+        user['daily_questions_done'] += 1
         user['task_stage'] = None
         user['task_answer'] = None
         await show_home(update, context)
