@@ -42,7 +42,8 @@ async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
             'last_claimed': 0,
             'task_stage': None,
             'task_answer': None,
-            'name': None
+            'name': None,
+            'used_questions': set()
         }
 
         if args:
@@ -86,13 +87,16 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if balance >= EARNING_LIMIT and data.startswith("task"):
-        await query.edit_message_text("You have to withdraw your amount now, Go to Withdraw section and text the Admin.")
+        await query.edit_message_text(
+            "You have to withdraw your amount now, Go to Withdraw section and text the Admin.",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back to Home", callback_data="home")]])
+        )
         return
 
     if data == "invite":
-        invite_link = f"https://t.me/{context.bot.username}?start={user_id}"
+        link = f"https://t.me/{context.bot.username}?start={user_id}"
         count = len(users[user_id]['invites'])
-        text = f"Your invite link:\n{invite_link}\n\nInvited: {count}/{MAX_INVITES}\nBalance: ${balance:.2f}"
+        text = f"Your invite link:\n{link}\n\nInvited: {count}/{MAX_INVITES}\nBalance: ${balance:.2f}"
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="home")]]))
 
     elif data == "daily":
@@ -118,25 +122,20 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Ask the Admin when your balance reach to 100 USD", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="home")]]))
 
     elif data == "notice":
-        text = (
-            "Those who completed the minimum withdrawal amount will get their Money in 20th July.\n"
-            "Don't forgot to top up 0.2 solona in your account as gas fees."
-        )
+        text = "Those who completed the minimum withdrawal amount will get their Money in 20th July.\nDon't forgot to top up 0.2 solona in your account as gas fees."
         await query.edit_message_text(text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="home")]]))
 
     elif data == "countdown":
-        target_dt = datetime(2024, 7, 20, 0, 0, 0, tzinfo=timezone(timedelta(hours=6)))  # BD Time
-        now_dt = datetime.now(timezone(timedelta(hours=6)))
-        diff = target_dt - now_dt
-
-        if diff.total_seconds() > 0:
-            days, rem = divmod(diff.total_seconds(), 86400)
-            hours, rem = divmod(rem, 3600)
-            minutes, seconds = divmod(rem, 60)
-            countdown_text = f"Time left: {int(days)} days, {int(hours)}h {int(minutes)}m {int(seconds)}s"
+        bd_time = timezone(timedelta(hours=6))
+        now = datetime.now(bd_time)
+        target = datetime(2024, 7, 20, 0, 0, tzinfo=bd_time)
+        remaining = target - now
+        if remaining.total_seconds() > 0:
+            h, rem = divmod(remaining.total_seconds(), 3600)
+            m, _ = divmod(rem, 60)
+            countdown_text = f"⏳ Time left: {int(h)} hours, {int(m)} minutes"
         else:
             countdown_text = "⏳ Countdown Complete!"
-
         await query.edit_message_text(countdown_text, reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="home")]]))
 
     elif data == "task":
@@ -148,22 +147,31 @@ async def button_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await query.edit_message_text("Choose your task:", reply_markup=InlineKeyboardMarkup(task_buttons))
 
     elif data.startswith("task_"):
-        if data == "task_simple":
-            q, a = random.choice(simple_questions)
-            reward = 2
-        elif data == "task_complex":
-            q, a = random.choice(complex_questions)
-            reward = 5
-        elif data == "task_expr":
-            q, a = random.choice(expressions)
-            reward = 10
-        elif data == "task_quad":
-            q, a = random.choice(quadratics)
-            reward = 10
+        user = users[user_id]
+        used = user['used_questions']
+        question_pool = {
+            "task_simple": simple_questions,
+            "task_complex": complex_questions,
+            "task_expr": expressions,
+            "task_quad": quadratics
+        }
+        reward_map = {
+            "task_simple": 2,
+            "task_complex": 5,
+            "task_expr": 10,
+            "task_quad": 10
+        }
 
-        users[user_id]['task_stage'] = data
-        users[user_id]['task_answer'] = str(a)
-        users[user_id]['task_reward'] = reward
+        available = [q for q in question_pool[data] if str(q) not in used]
+        if not available:
+            await query.edit_message_text("❌ No new questions available. Try another task.", reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back", callback_data="task")]]))
+            return
+
+        q, a = random.choice(available)
+        user['task_stage'] = data
+        user['task_answer'] = str(a)
+        user['task_reward'] = reward_map[data]
+        user['used_questions'].add(str((q, a)))
         await query.edit_message_text(f"Answer this: {q}")
 
 async def answer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -182,10 +190,13 @@ async def answer_handler(update: Update, context: ContextTypes.DEFAULT_TYPE):
         return
 
     if user['task_stage']:
-        correct = str(user['task_answer'])
-        if msg.replace(" ", "") == correct.replace(" ", ""):
+        correct = str(user['task_answer']).replace(" ", "")
+        if msg.replace(" ", "") == correct:
             if user['balance'] >= EARNING_LIMIT:
-                await update.message.reply_text("You have to withdraw your amount now, Go to Withdraw section and text the Admin.")
+                await update.message.reply_text(
+                    "You have to withdraw your amount now, Go to Withdraw section and text the Admin.",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton("Back to Home", callback_data="home")]])
+                )
             else:
                 user['balance'] += user['task_reward']
                 await update.message.reply_text(f"✅ Correct! You earned ${user['task_reward']}")
